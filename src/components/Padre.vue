@@ -1,15 +1,15 @@
 <template>
-  <div id="app">
-    <Padre />
+  <div>
+    <Hijo mensaje="Hola desde el padre" />
   </div>
 </template>
 
 <script>
-import Padre from './components/Padre.vue'
+import Hijo from './Hijo.vue'
 
 export default {
   components: {
-    Padre
+    Hijo
   }
 }
 </script>
