@@ -1,148 +1,155 @@
 <template>
   <div class="app-container">
-    <!-- 1. VISTA DE LOGIN (si no hay usuario autenticado) -->
-    <Login v-if="!currentUser" @login-success="onLoginSuccess" />
+    <header class="app-header">
+      <h2>Emprendedores Locales de Ñuble</h2>
+      <p class="subtitle">Backend NestJS + TypeORM + MySQL</p>
+    </header>
 
-    <!-- 2. VISTA PRINCIPAL DEL SISTEMA (usuario autenticado) -->
-    <div v-else class="main-content">
-      <!-- Barra superior con datos de sesión y botón de desconexión -->
-      <header class="user-header">
-        <div>
-          <h2>Emprendedores Locales de Ñuble</h2>
-          <p class="session-info">
-            Usuario: <strong>{{ currentUser.email }}</strong> | 
-            Estado: <span :class="['badge-role', currentUser.rol]">{{ currentUser.rol === 'admin' ? 'Admin conectado' : 'Viewer conectado' }}</span>
-          </p>
+    <!-- FORMULARIO CREAR / EDITAR -->
+    <section class="card form-section">
+      <h3>{{ editingId ? 'Editar Emprendedor' : 'Registrar Nuevo Emprendedor' }}</h3>
+      <form @submit.prevent="handleSubmit">
+        <div class="input-grid">
+          <input 
+            v-model="formData.nombre" 
+            type="text" 
+            placeholder="Nombre (mín. 3 letras)" 
+            required 
+          />
+          <input 
+            v-model="formData.comuna" 
+            type="text" 
+            placeholder="Comuna (ej: Chillán, San Carlos)" 
+            required 
+          />
+          <select v-model="formData.rubro" required>
+            <option disabled value="">Seleccione un Rubro</option>
+            <option value="Apicultura">Apicultura</option>
+            <option value="Lácteos">Lácteos</option>
+            <option value="Textiles">Textiles</option>
+            <option value="Turismo">Turismo</option>
+            <option value="Artesanía">Artesanía</option>
+            <option value="Agricultura">Agricultura</option>
+          </select>
+          <input 
+            v-model="formData.contacto" 
+            type="text" 
+            placeholder="Contacto (email o teléfono)" 
+            required 
+          />
         </div>
-        <button class="btn-logout" @click="handleLogout">Cerrar Sesión</button>
-      </header>
 
-      <!-- SECCIÓN EXCLUSIVA PARA ADMIN: Formulario Crear / Editar -->
-      <section v-if="currentUser.rol === 'admin'" class="card form-section">
-        <h3>{{ editingId ? 'Editar Emprendedor' : 'Registrar Nuevo Emprendedor' }}</h3>
-        <form @submit.prevent="handleSubmit">
-          <div class="input-grid">
-            <input 
-              v-model="formData.nombre" 
-              type="text" 
-              placeholder="Nombre del emprendimiento" 
-              required 
-            />
-            <input 
-              v-model="formData.rubro" 
-              type="text" 
-              placeholder="Rubro (ej: Gastronomía, Tejidos)" 
-              required 
-            />
-            <input 
-              v-model="formData.ubicacion" 
-              type="text" 
-              placeholder="Ubicación (ej: San Carlos, Chillán)" 
-            />
-          </div>
-          <div class="form-actions">
-            <button type="submit" class="btn-primary">
-              {{ editingId ? 'Actualizar' : 'Agregar' }}
-            </button>
-            <button 
-              v-if="editingId" 
-              type="button" 
-              class="btn-secondary" 
-              @click="cancelEdit"
-            >
-              Cancelar Edición
-            </button>
-          </div>
-        </form>
-      </section>
+        <div class="full-width">
+          <textarea 
+            v-model="formData.descripcion" 
+            placeholder="Descripción (mínimo 10 caracteres)" 
+            rows="2" 
+            required
+          ></textarea>
+        </div>
 
-      <!-- MENSAJE DE RESTRICCIÓN PARA VIEWER -->
-      <div v-else class="viewer-notice">
-        <p>ℹ️ Tienes permisos de solo lectura (<strong>Viewer</strong>). Solo los administradores pueden registrar, modificar o eliminar emprendedores.</p>
+        <div v-if="errorMessage" class="error-banner">
+          {{ errorMessage }}
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">
+            {{ editingId ? 'Actualizar' : 'Agregar' }}
+          </button>
+          <button 
+            v-if="editingId" 
+            type="button" 
+            class="btn-secondary" 
+            @click="cancelEdit"
+          >
+            Cancelar Edición
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- BUSCADOR CON FILTROS (GET /emprendedores/buscar) -->
+    <section class="card filter-section">
+      <h3>Buscar Emprendedores</h3>
+      <div class="filter-grid">
+        <input 
+          v-model="filterComuna" 
+          type="text" 
+          placeholder="Filtrar por comuna..." 
+        />
+        <select v-model="filterRubro">
+          <option value="">Todos los rubros</option>
+          <option value="Apicultura">Apicultura</option>
+          <option value="Lácteos">Lácteos</option>
+          <option value="Textiles">Textiles</option>
+          <option value="Turismo">Turismo</option>
+          <option value="Artesanía">Artesanía</option>
+          <option value="Agricultura">Agricultura</option>
+        </select>
+        <button class="btn-search" @click="handleSearch">Buscar</button>
+        <button class="btn-secondary" @click="resetSearch">Limpiar</button>
       </div>
+    </section>
 
-      <!-- LISTA DE REGISTROS -->
-      <section class="card list-section">
-        <h3>Lista de Emprendedores</h3>
-        <p v-if="emprendedores.length === 0" class="empty-state">No hay registros disponibles.</p>
-        
-        <table v-else class="data-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Nombre</th>
-              <th>Rubro</th>
-              <th>Ubicación</th>
-              <!-- Columna de acciones solo visible para rol admin -->
-              <th v-if="currentUser.rol === 'admin'">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in emprendedores" :key="item.id">
-              <td>{{ item.id }}</td>
-              <td><strong>{{ item.nombre }}</strong></td>
-              <td>{{ item.rubro }}</td>
-              <td>{{ item.ubicacion || 'No informada' }}</td>
-              <!-- Botones Editar y Eliminar solo visibles para admin -->
-              <td v-if="currentUser.rol === 'admin'" class="table-actions">
-                <button class="btn-warning" @click="startEdit(item)">Editar</button>
-                <button class="btn-danger" @click="handleDelete(item.id)">Eliminar</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-    </div>
+    <!-- LISTA DE REGISTROS -->
+    <section class="card list-section">
+      <h3>Catálogo de Emprendimientos</h3>
+      <p v-if="emprendedores.length === 0" class="empty-state">No se encontraron registros.</p>
+      
+      <table v-else class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Nombre</th>
+            <th>Comuna</th>
+            <th>Rubro</th>
+            <th>Descripción</th>
+            <th>Contacto</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in emprendedores" :key="item.id">
+            <td>{{ item.id }}</td>
+            <td><strong>{{ item.nombre }}</strong></td>
+            <td>{{ item.comuna }}</td>
+            <td><span class="badge">{{ item.rubro }}</span></td>
+            <td>{{ item.descripcion }}</td>
+            <td>{{ item.contacto }}</td>
+            <td class="table-actions">
+              <button class="btn-warning" @click="startEdit(item)">Editar</button>
+              <button class="btn-danger" @click="handleDelete(item.id)">Eliminar</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
   </div>
 </template>
 
 <script>
-import Login from './components/Login.vue';
-
 export default {
   name: 'App',
-  components: { Login },
   data() {
     return {
-      currentUser: null,
-      token: '',
       emprendedores: [],
+      filterComuna: '',
+      filterRubro: '',
       formData: {
         nombre: '',
+        comuna: '',
         rubro: '',
-        ubicacion: ''
+        descripcion: '',
+        contacto: ''
       },
-      editingId: null
+      editingId: null,
+      errorMessage: ''
     };
   },
   mounted() {
-    // Al cargar la app, revisar si hay sesión previa guardada en localStorage
-    const savedToken = localStorage.getItem('token');
-    const savedUser = localStorage.getItem('user');
-
-    if (savedToken && savedUser) {
-      this.token = savedToken;
-      this.currentUser = JSON.parse(savedUser);
-      this.fetchEmprendedores();
-    }
+    this.fetchEmprendedores();
   },
   methods: {
-    onLoginSuccess(usuario) {
-      this.token = localStorage.getItem('token');
-      this.currentUser = usuario;
-      this.fetchEmprendedores();
-    },
-
-    handleLogout() {
-      // Limpiar datos locales y restablecer estado
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      this.currentUser = null;
-      this.token = '';
-      this.emprendedores = [];
-      this.cancelEdit();
-    },
-
     async fetchEmprendedores() {
       try {
         const res = await fetch('http://localhost:3000/emprendedores');
@@ -150,40 +157,63 @@ export default {
           this.emprendedores = await res.json();
         }
       } catch (err) {
-        console.error('Error al cargar emprendedores:', err);
+        console.error('Error al conectar con NestJS:', err);
       }
     },
 
-    async handleSubmit() {
+    async handleSearch() {
       try {
-        const isEditing = Boolean(this.editingId);
-        const url = isEditing
-          ? `http://localhost:3000/emprendedores/${this.editingId}`
-          : 'http://localhost:3000/emprendedores';
-        
-        const method = isEditing ? 'PUT' : 'POST';
+        const params = new URLSearchParams();
+        if (this.filterComuna.trim()) params.append('comuna', this.filterComuna.trim());
+        if (this.filterRubro) params.append('rubro', this.filterRubro);
 
+        const url = params.toString()
+          ? `http://localhost:3000/emprendedores/buscar?${params.toString()}`
+          : 'http://localhost:3000/emprendedores';
+
+        const res = await fetch(url);
+        if (res.ok) {
+          this.emprendedores = await res.json();
+        }
+      } catch (err) {
+        console.error('Error al realizar búsqueda:', err);
+      }
+    },
+
+    resetSearch() {
+      this.filterComuna = '';
+      this.filterRubro = '';
+      this.fetchEmprendedores();
+    },
+
+    async handleSubmit() {
+      this.errorMessage = '';
+      const isEditing = Boolean(this.editingId);
+      const url = isEditing
+        ? `http://localhost:3000/emprendedores/${this.editingId}`
+        : 'http://localhost:3000/emprendedores';
+
+      const method = isEditing ? 'PUT' : 'POST';
+
+      try {
         const res = await fetch(url, {
           method,
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.token}`
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(this.formData)
         });
 
         const data = await res.json();
 
         if (!res.ok) {
-          alert(data.error || 'Ocurrió un error en la operación');
+          const msg = Array.isArray(data.message) ? data.message.join(', ') : (data.message || data.error);
+          this.errorMessage = msg || 'Ocurrió un error en la solicitud';
           return;
         }
 
-        // Limpiar formulario y recargar datos
         this.cancelEdit();
         this.fetchEmprendedores();
       } catch (err) {
-        console.error('Error al guardar registro:', err);
+        this.errorMessage = 'No fue posible conectar con el servidor';
       }
     },
 
@@ -191,15 +221,19 @@ export default {
       this.editingId = item.id;
       this.formData = {
         nombre: item.nombre,
+        comuna: item.comuna,
         rubro: item.rubro,
-        ubicacion: item.ubicacion || ''
+        descripcion: item.descripcion,
+        contacto: item.contacto
       };
+      this.errorMessage = '';
       window.scrollTo({ top: 0, behavior: 'smooth' });
     },
 
     cancelEdit() {
       this.editingId = null;
-      this.formData = { nombre: '', rubro: '', ubicacion: '' };
+      this.formData = { nombre: '', comuna: '', rubro: '', descripcion: '', contacto: '' };
+      this.errorMessage = '';
     },
 
     async handleDelete(id) {
@@ -207,22 +241,17 @@ export default {
 
       try {
         const res = await fetch(`http://localhost:3000/emprendedores/${id}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${this.token}`
-          }
+          method: 'DELETE'
         });
 
-        const data = await res.json();
-
         if (!res.ok) {
-          alert(data.error || 'No fue posible eliminar');
+          alert('Error al eliminar registro');
           return;
         }
 
         this.fetchEmprendedores();
       } catch (err) {
-        console.error('Error al eliminar registro:', err);
+        console.error('Error al eliminar:', err);
       }
     }
   }
@@ -231,47 +260,20 @@ export default {
 
 <style scoped>
 .app-container {
-  max-width: 900px;
+  max-width: 1000px;
   margin: 0 auto;
   padding: 1.5rem;
   font-family: Arial, sans-serif;
   color: #2c3e50;
 }
-.user-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.app-header {
   border-bottom: 2px solid #eceff1;
-  padding-bottom: 1rem;
+  padding-bottom: 0.8rem;
   margin-bottom: 1.5rem;
 }
-.session-info {
-  margin: 0.3rem 0 0 0;
-  color: #555;
-  font-size: 0.95rem;
-}
-.badge-role {
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  font-weight: bold;
-}
-.badge-role.admin {
-  background-color: #e8f5e9;
-  color: #2e7d32;
-}
-.badge-role.viewer {
-  background-color: #e3f2fd;
-  color: #1565c0;
-}
-.btn-logout {
-  background-color: #d32f2f;
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: bold;
+.subtitle {
+  color: #607d8b;
+  margin: 0.2rem 0 0 0;
 }
 .card {
   background: white;
@@ -282,15 +284,36 @@ export default {
 }
 .input-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
   gap: 0.8rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.8rem;
 }
-input {
+.filter-grid {
+  display: grid;
+  grid-template-columns: 2fr 2fr 1fr 1fr;
+  gap: 0.8rem;
+}
+.full-width {
+  margin-bottom: 0.8rem;
+}
+input, select, textarea {
+  width: 100%;
   padding: 0.6rem;
   border: 1px solid #ccc;
   border-radius: 4px;
-  font-size: 0.95rem;
+  box-sizing: border-box;
+  font-size: 0.9rem;
+}
+textarea {
+  resize: vertical;
+}
+.error-banner {
+  background-color: #ffebee;
+  color: #c62828;
+  padding: 0.6rem 1rem;
+  border-radius: 4px;
+  margin-bottom: 0.8rem;
+  font-size: 0.9rem;
 }
 .form-actions {
   display: flex;
@@ -313,12 +336,22 @@ input {
   border-radius: 4px;
   cursor: pointer;
 }
-.viewer-notice {
-  background-color: #e3f2fd;
-  color: #0d47a1;
-  padding: 0.8rem 1.2rem;
-  border-radius: 6px;
-  margin-bottom: 1.5rem;
+.btn-search {
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+.badge {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 0.85rem;
 }
 .data-table {
   width: 100%;
@@ -340,7 +373,7 @@ input {
   background-color: #f57c00;
   color: white;
   border: none;
-  padding: 0.35rem 0.7rem;
+  padding: 0.35rem 0.6rem;
   border-radius: 4px;
   cursor: pointer;
 }
@@ -348,7 +381,7 @@ input {
   background-color: #e53935;
   color: white;
   border: none;
-  padding: 0.35rem 0.7rem;
+  padding: 0.35rem 0.6rem;
   border-radius: 4px;
   cursor: pointer;
 }
