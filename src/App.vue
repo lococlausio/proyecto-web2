@@ -1,15 +1,9 @@
 <template>
   <div id="app">
-    <Padre />
+    <Atractivos />
   </div>
 </template>
 
-<script>
-import Padre from './components/Padre.vue'
-
-export default {
-  components: {
-    Padre
-  }
-}
+<script setup>
+import Atractivos from './components/Atractivos.vue'
 </script>
