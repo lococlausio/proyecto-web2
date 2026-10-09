@@ -9,3 +9,6 @@ Este repositorio contiene la configuración base del entorno de desarrollo front
 ## Ejecución local
 1. Instalar dependencias: `npm install`
 2. Iniciar servidor: `npm run dev`
+
+## Actividad 9
+- Se agregó un formulario de contacto (`Contacto.vue`) con validación de campos obligatorios utilizando directivas `v-model`.

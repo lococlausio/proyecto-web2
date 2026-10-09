@@ -124,12 +124,18 @@
         </tbody>
       </table>
     </section>
+    <section class="card">
+      <h3>Contacto</h3>
+      <Contacto />
+    </section>
   </div>
 </template>
 
 <script>
+import Contacto from './components/Contacto.vue';
 export default {
   name: 'App',
+  components: { Contacto },
   data() {
     return {
       emprendedores: [],
